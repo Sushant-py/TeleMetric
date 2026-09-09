@@ -196,17 +196,6 @@ if EVALUATION_PATH.exists():
     if not raw.empty and not calibrated.empty:
         raw_row = raw.iloc[0]
         calibrated_row = calibrated.iloc[0]
-        calibration_summary = pd.DataFrame([
-            {"Metric": "ROC-AUC", "Raw XGBoost": raw_row["ROC_AUC"], "Calibrated XGBoost": calibrated_row["ROC_AUC"]},
-            {"Metric": "PR-AUC", "Raw XGBoost": raw_row["PR_AUC"], "Calibrated XGBoost": calibrated_row["PR_AUC"]},
-            {"Metric": "Brier Score", "Raw XGBoost": raw_row["Brier_Score"], "Calibrated XGBoost": calibrated_row["Brier_Score"]},
-            {"Metric": "Log Loss", "Raw XGBoost": raw_row["Log_Loss"], "Calibrated XGBoost": calibrated_row["Log_Loss"]},
-        ])
-        st.dataframe(
-            calibration_summary.style.format({"Raw XGBoost": "{:.4f}", "Calibrated XGBoost": "{:.4f}"}),
-            use_container_width=True,
-            hide_index=True,
-        )
         st.write(
             "The raw XGBoost probabilities remain the operational choice for TeleMetric: "
             "calibration produced only a very small PR-AUC increase while ROC-AUC, Brier "
