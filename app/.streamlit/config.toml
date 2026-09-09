@@ -4,3 +4,9 @@ font = "sans serif"
 
 [server]
 headless = true
+
+[theme]
+primaryColor = "#8e44ad" 
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#fafafa"s
