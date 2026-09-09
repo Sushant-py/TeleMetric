@@ -1,0 +1,7 @@
+{
+  "selected_model": "XGBoost",
+  "selection_metric": "5-fold CV ROC-AUC",
+  "selected_cv_roc_auc": 0.8509401799379692,
+  "selected_test_roc_auc": 0.84159889424396,
+  "selected_test_pr_auc": 0.6584424017785083
+}
