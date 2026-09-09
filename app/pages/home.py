@@ -18,7 +18,7 @@ cosmic_theme = """
     background-color: rgba(15, 12, 41, 0.6);
 }
 .telemetric-title {
-    font-size: 3.5rem;
+    font-size: 5rem;
     font-weight: 800;
     background: linear-gradient(to right, #e74c3c, #3498db, #2ecc71);
     -webkit-background-clip: text;
