@@ -1,24 +1,24 @@
-import streamlit as st
-import pandas as pd
+import json
 from pathlib import Path
-import plotly.express as px
-from PIL import Image
-import streamlit as st
 
-# Custom CSS for Cosmic Background and Gradient Title
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+from PIL import Image
+
+st.set_page_config(page_title="TeleMetric | Model Insights", page_icon="🧠", layout="wide")
+
+# Custom CSS for the TeleMetric visual theme.
 cosmic_theme = """
 <style>
-/* Deep Cosmic Gradient Background */
 .stApp {
     background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
 }
 
-/* Sidebar transparency to blend with the cosmic background */
 [data-testid="stSidebar"] {
     background-color: rgba(15, 12, 41, 0.6);
 }
 
-/* Gradient TeleMetric Title (Red -> Blue -> Green) */
 .telemetric-title {
     font-size: 3.5rem;
     font-weight: 800;
@@ -31,73 +31,130 @@ cosmic_theme = """
 </style>
 """
 
-# Inject the CSS
 st.markdown(cosmic_theme, unsafe_allow_html=True)
-
-# Render the stylized title
 st.markdown('<p class="telemetric-title">TeleMetric</p>', unsafe_allow_html=True)
-
-# Continue with the rest of your main page code...
 st.markdown("### Customer Retention & Churn Intelligence")
-st.set_page_config(page_title="TeleMetric | Model Insights", page_icon="🧠", layout="wide")
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 MODEL_RESULTS_PATH = OUTPUT_DIR / "model_comparison.csv"
+MODEL_EVALUATION_PATH = OUTPUT_DIR / "model_evaluation.csv"
+PARAMS_PATH = OUTPUT_DIR / "best_model_params.json"
 SHAP_IMAGE_PATH = OUTPUT_DIR / "shap_feature_importance.png"
 CALIBRATION_IMAGE_PATH = OUTPUT_DIR / "xgboost_calibration_curve.png"
 
+# -----------------------------------------------------------------------------
+# Load saved evaluation artifacts
+# -----------------------------------------------------------------------------
 try:
     model_results = pd.read_csv(MODEL_RESULTS_PATH)
 except FileNotFoundError:
     st.error("model_comparison.csv was not found inside the outputs folder.")
     st.stop()
 
+try:
+    evaluation_df = pd.read_csv(MODEL_EVALUATION_PATH)
+except FileNotFoundError:
+    evaluation_df = pd.DataFrame()
+
+try:
+    with open(PARAMS_PATH, "r", encoding="utf-8") as f:
+        best_params = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    best_params = {}
+
 st.title("Model Comparison & Explainability")
-st.write("Model performance and the global SHAP feature-importance artifact produced by the ML pipeline.")
+st.write(
+    "Model benchmarking, the final XGBoost modeling path, probability calibration, "
+    "and global SHAP explainability."
+)
 
-if "ROC_AUC" in model_results.columns:
-    best_row = model_results.loc[model_results["ROC_AUC"].idxmax()]
-    best_model_name = best_row["Model"]
-    best_auc = best_row["ROC_AUC"]
-    best_std = best_row["ROC_AUC_STD"] if "ROC_AUC_STD" in best_row else 0
-else:
-    best_model_name = "Unavailable"
-    best_auc = 0
-    best_std = 0
+# -----------------------------------------------------------------------------
+# Be explicit about the fact that these are different experiments.
+# The original leaderboard contains untuned baseline models, while XGBoost was
+# subsequently tuned in a separate RandomizedSearchCV experiment.
+# -----------------------------------------------------------------------------
+benchmark_best = model_results.loc[model_results["ROC_AUC"].idxmax()]
+benchmark_model = benchmark_best["Model"]
+benchmark_auc = benchmark_best["ROC_AUC"]
+benchmark_std = benchmark_best.get("ROC_AUC_STD", float("nan"))
 
-col1, col2 = st.columns(2)
+xgb_tuned_cv = 0.8484864803582564
+xgb_test_auc = 0.8415147718860492
+xgb_test_pr_auc = 0.6530851222334262
+
+col1, col2, col3 = st.columns(3)
 with col1:
-    st.info(f"**Best model**\n\n### {best_model_name}\nROC-AUC {best_auc*100:.2f}% · CV std {best_std*100:.2f} percentage points")
+    st.info(
+        f"**Baseline CV leader**\n\n"
+        f"### {benchmark_model}\n"
+        f"ROC-AUC {benchmark_auc * 100:.2f}% · CV std {benchmark_std * 100:.2f} pp"
+    )
 with col2:
-    st.info("**Model selection principle**\n\nCompare ROC-AUC across Logistic Regression, Random Forest and XGBoost. The dashboard reads the project's model comparison output directly.")
+    st.info(
+        "**Operational model**\n\n"
+        "### Tuned XGBoost\n"
+        f"Search CV ROC-AUC {xgb_tuned_cv * 100:.2f}%"
+    )
+with col3:
+    st.info(
+        "**Held-out test**\n\n"
+        "### Tuned XGBoost\n"
+        f"ROC-AUC {xgb_test_auc * 100:.2f}% · PR-AUC {xgb_test_pr_auc * 100:.2f}%"
+    )
+
+st.caption(
+    "Important: the 84.73% Logistic Regression score is from the initial untuned "
+    "5-fold comparison. The 84.85% XGBoost score is from a separate hyperparameter "
+    "search, so those two numbers are not a like-for-like final model comparison."
+)
 
 st.divider()
 
-st.subheader("Model Leaderboard")
+# -----------------------------------------------------------------------------
+# Baseline model comparison
+# -----------------------------------------------------------------------------
+st.subheader("1. Baseline Model Comparison")
+st.write(
+    "The initial experiment compared Logistic Regression, Random Forest and XGBoost "
+    "using the same 5-fold StratifiedKFold setup and ROC-AUC as the scoring metric. "
+    "This identifies the baseline ROC-AUC leader; it does not by itself establish the "
+    "best final production model across every possible metric."
+)
+
 display_results = model_results.copy()
-if "ROC_AUC" in display_results.columns:
-    display_results["ROC_AUC"] = display_results["ROC_AUC"].round(3)
-    display_results = display_results.sort_values("ROC_AUC", ascending=False)
+display_results["ROC_AUC"] = display_results["ROC_AUC"].round(3)
 if "ROC_AUC_STD" in display_results.columns:
     display_results["ROC_AUC_STD"] = display_results["ROC_AUC_STD"].round(3)
+display_results = display_results.sort_values("ROC_AUC", ascending=False)
 
 st.dataframe(display_results, use_container_width=True, hide_index=True)
-st.caption("The leaderboard ranks the trained models using cross-validated ROC-AUC.")
-st.divider()
+st.caption(
+    "Baseline leaderboard: mean 5-fold ROC-AUC ± fold-to-fold standard deviation. "
+    "Higher ROC-AUC is better; lower standard deviation indicates more stable fold scores."
+)
 
 if "ROC_AUC" in model_results.columns:
-    st.subheader("ROC-AUC Comparison")
+    st.subheader("Baseline ROC-AUC")
     fig_auc = px.bar(
         model_results,
         x="Model",
         y="ROC_AUC",
         text="ROC_AUC",
         color="Model",
-        color_discrete_sequence=["#e74c3c", "#2ecc71", "#3498db"] # Red, Green, Blue
+        color_discrete_sequence=["#e74c3c", "#2ecc71", "#3498db"],
     )
     fig_auc.update_traces(texttemplate="%{text:.3f}", textposition="outside")
-    fig_auc.update_layout(template="plotly_dark", yaxis_title="ROC-AUC (%)", xaxis_title="", yaxis_range=[max(0, model_results["ROC_AUC"].min() - 0.05), min(1, model_results["ROC_AUC"].max() + 0.05)], height=400)
+    fig_auc.update_layout(
+        template="plotly_dark",
+        yaxis_title="ROC-AUC",
+        xaxis_title="",
+        yaxis_range=[
+            max(0, model_results["ROC_AUC"].min() - 0.05),
+            min(1, model_results["ROC_AUC"].max() + 0.05),
+        ],
+        height=400,
+    )
     st.plotly_chart(fig_auc, use_container_width=True)
 
 if "ROC_AUC_STD" in model_results.columns:
@@ -108,16 +165,61 @@ if "ROC_AUC_STD" in model_results.columns:
         y="ROC_AUC_STD",
         text="ROC_AUC_STD",
         color="Model",
-        color_discrete_sequence=["#e74c3c", "#2ecc71", "#3498db"] # Red, Green, Blue
+        color_discrete_sequence=["#e74c3c", "#2ecc71", "#3498db"],
     )
     fig_std.update_traces(texttemplate="%{text:.3f}", textposition="outside")
-    fig_std.update_layout(template="plotly_dark", yaxis_title="ROC-AUC Standard Deviation", xaxis_title="", height=400)
+    fig_std.update_layout(
+        template="plotly_dark",
+        yaxis_title="ROC-AUC Standard Deviation",
+        xaxis_title="",
+        height=400,
+    )
     st.plotly_chart(fig_std, use_container_width=True)
 
 st.divider()
 
-st.header("Model Explainability (SHAP)")
-st.write("SHAP importance shows which variables have the greatest influence on the model's predictions.")
+# -----------------------------------------------------------------------------
+# Tuned XGBoost
+# -----------------------------------------------------------------------------
+st.subheader("2. Tuned XGBoost — Final Modeling Path")
+st.write(
+    "After the baseline comparison, XGBoost was tuned separately with "
+    "RandomizedSearchCV using 20 parameter combinations and 5-fold cross-validation. "
+    "The selected configuration was then evaluated on the held-out test set."
+)
+
+if best_params:
+    params_df = pd.DataFrame(
+        [{"Hyperparameter": key, "Selected value": value} for key, value in best_params.items()]
+    )
+    st.dataframe(params_df, use_container_width=True, hide_index=True)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Best search CV ROC-AUC", f"{xgb_tuned_cv:.4f}")
+with col2:
+    st.metric("Held-out test ROC-AUC", f"{xgb_test_auc:.4f}")
+with col3:
+    st.metric("Held-out test PR-AUC", f"{xgb_test_pr_auc:.4f}")
+
+st.warning(
+    "The tuned XGBoost search score (0.8485) should not be treated as a direct "
+    "replacement for the 0.8473 Logistic Regression baseline score. Logistic "
+    "Regression was not subjected to the same hyperparameter search. The held-out "
+    "test scores are the more direct generalization check for the selected XGBoost model."
+)
+
+st.divider()
+
+# -----------------------------------------------------------------------------
+# SHAP
+# -----------------------------------------------------------------------------
+st.header("3. Model Explainability (SHAP)")
+st.write(
+    "SHAP (SHapley Additive exPlanations) estimates how much each feature contributes "
+    "to a model prediction. The artifact shown here is a global importance view for "
+    "the tree-based XGBoost model."
+)
 
 if SHAP_IMAGE_PATH.exists():
     try:
@@ -128,52 +230,83 @@ if SHAP_IMAGE_PATH.exists():
 else:
     st.warning("SHAP feature importance image was not found.")
 
-st.info("**SHAP Data**\n\nThe underlying ranked values are available in `outputs/shap_feature_importance.csv`, making the explanation reproducible rather than image-only.")
+st.caption(
+    "This repository currently stores the SHAP feature-importance visualization as a PNG artifact."
+)
+
 st.divider()
 
-st.header("Probability Calibration")
+# -----------------------------------------------------------------------------
+# Calibration
+# -----------------------------------------------------------------------------
+st.header("4. Probability Calibration")
+st.write(
+    "Calibration is a post-processing step that attempts to make predicted churn "
+    "probabilities better match observed churn frequencies. It is evaluated separately "
+    "from model discrimination."
+)
+
 if CALIBRATION_IMAGE_PATH.exists():
     try:
         img_calib = Image.open(CALIBRATION_IMAGE_PATH)
-        st.image(img_calib, caption="OOF Probability Calibration: Raw XGBoost vs Calibrated XGBoost", use_container_width=True)
+        st.image(
+            img_calib,
+            caption="OOF Probability Calibration: Raw XGBoost vs Calibrated XGBoost",
+            use_container_width=True,
+        )
     except Exception as e:
-        st.error(f"Failed to load Calibration image: {e}")
+        st.error(f"Failed to load calibration image: {e}")
 else:
     st.warning("xgboost_calibration_curve.png was not found.")
 
-evaluation_df = pd.DataFrame({
-    "Metric": ["ROC-AUC", "PR-AUC", "Brier Score", "Log Loss"],
-    "Raw XGBoost": [0.8404, 0.6499, 0.1378, 0.4238],
-    "Calibrated XGBoost": [0.8378, 0.6506, 0.1392, 0.4331]
-})
+if not evaluation_df.empty:
+    st.subheader("OOF Evaluation — Raw vs Calibrated XGBoost")
+    st.dataframe(evaluation_df, use_container_width=True, hide_index=True)
 
-st.subheader("OOF Evaluation Results")
-st.dataframe(evaluation_df, use_container_width=True, hide_index=True)
+    raw = evaluation_df.loc[evaluation_df["Model"].eq("XGBoost (raw OOF)")]
+    calibrated = evaluation_df.loc[evaluation_df["Model"].eq("Calibrated XGBoost (OOF)")]
 
-st.subheader("Predictive Performance")
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("Raw XGBoost ROC-AUC", "0.8404")
-    st.metric("Raw XGBoost PR-AUC", "0.6499")
-with col2:
-    st.metric("Calibrated XGBoost ROC-AUC", "0.8378")
-    st.metric("Calibrated XGBoost PR-AUC", "0.6506")
+    if not raw.empty and not calibrated.empty:
+        raw_row = raw.iloc[0]
+        calibrated_row = calibrated.iloc[0]
 
-st.subheader("Probability Reliability")
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("Raw Brier Score", "0.1378")
-    st.metric("Raw Log Loss", "0.4238")
-with col2:
-    st.metric("Calibrated Brier Score", "0.1392")
-    st.metric("Calibrated Log Loss", "0.4331")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Raw XGBoost ROC-AUC", f"{raw_row['ROC_AUC']:.4f}")
+            st.metric("Raw XGBoost PR-AUC", f"{raw_row['PR_AUC']:.4f}")
+            st.metric("Raw Brier Score", f"{raw_row['Brier_Score']:.4f}")
+            st.metric("Raw Log Loss", f"{raw_row['Log_Loss']:.4f}")
+        with col2:
+            st.metric("Calibrated ROC-AUC", f"{calibrated_row['ROC_AUC']:.4f}")
+            st.metric("Calibrated PR-AUC", f"{calibrated_row['PR_AUC']:.4f}")
+            st.metric("Calibrated Brier Score", f"{calibrated_row['Brier_Score']:.4f}")
+            st.metric("Calibrated Log Loss", f"{calibrated_row['Log_Loss']:.4f}")
+
+        st.info(
+            "Calibration was tested because TeleMetric uses churn probabilities for "
+            "risk scoring. In this experiment, calibration improved PR-AUC only slightly "
+            "(0.6499 → 0.6506) while ROC-AUC, Brier Score and Log Loss became slightly "
+            "worse. Therefore, the evidence does not support presenting calibration as "
+            "an overall performance improvement."
+        )
+else:
+    st.warning("model_evaluation.csv was not found, so OOF calibration metrics cannot be displayed.")
 
 st.divider()
-st.subheader("Overall Model Assessment")
-st.markdown("""
-TeleMetric evaluates models from two perspectives:
-* **Predictive performance:** The model should correctly distinguish customers who are likely to churn from customers who are likely to remain. ROC-AUC and PR-AUC measure this aspect.
-* **Probability reliability:** The model should also produce probabilities that are meaningful and trustworthy. Brier Score, Log Loss, and the calibration curve measure this aspect.
 
-The current experiment indicates that raw XGBoost provides the strongest overall probability performance among the evaluated XGBoost variants.
-""")
+# -----------------------------------------------------------------------------
+# Final assessment
+# -----------------------------------------------------------------------------
+st.subheader("5. How to Read the Model Results")
+st.markdown(
+    """
+**What the experiments establish:**
+
+- **Baseline benchmark:** Logistic Regression had the highest mean 5-fold ROC-AUC (0.8473) among the three *untuned* baseline models.
+- **Tuned XGBoost:** A separate RandomizedSearchCV experiment found an XGBoost configuration with a CV ROC-AUC of 0.8485, followed by a held-out test ROC-AUC of 0.8415 and PR-AUC of 0.6531.
+- **Probability calibration:** Calibration was investigated because TeleMetric uses probabilities for downstream risk scoring, but the current OOF results do not show an overall improvement from calibration.
+- **Explainability:** SHAP provides a global view of which features influence the XGBoost predictions.
+
+**Important modeling caveat:** the baseline Logistic Regression and tuned XGBoost scores come from different experiments, so they should not be presented as a definitive head-to-head final comparison. A future model-selection experiment should tune/evaluate all candidate models under the same protocol and compare ROC-AUC, PR-AUC, classification metrics and probability-quality metrics consistently.
+"""
+)
