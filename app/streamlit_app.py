@@ -1,5 +1,8 @@
 import streamlit as st
+from pathlib import Path
 
+# Automatically find the exact path to the pages folder
+PAGES_DIR = Path(__file__).parent / "pages"
 # 1. Define the pages
 home_page = st.Page("app/pages/home.py", title="TeleMetric", icon="🚀")
 explorer_page = st.Page("app/pages/01_Customer_Explorer.py", title="Customer Explorer")
