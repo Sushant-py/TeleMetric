@@ -4,12 +4,6 @@ from pathlib import Path
 import plotly.express as px
 import streamlit as st
 
-# Define your pages with clean titles
-home_page = st.Page("app/pages/home.py", title="TeleMetric", icon="🚀")
-explorer_page = st.Page("app/pages/01_Customer_Explorer.py", title="Customer Explorer")
-risk_page = st.Page("app/pages/02_Risk_Intelligence.py", title="Risk Intelligence")
-simulator_page = st.Page("app/pages/03_Retention_Simulator.py", title="Retention Simulator")
-insights_page = st.Page("app/pages/04_Model_Insights.py", title="Model Insights")
 
 # Initialize navigation
 pg = st.navigation([home_page, explorer_page, risk_page, simulator_page, insights_page])
