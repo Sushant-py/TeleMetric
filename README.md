@@ -1,6 +1,6 @@
 # TeleMetric: Customer Retention & Churn Intelligence
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_App-8e44ad?style=for-the-badge)](https://mv7ta8djgbm9chukkwsdaz.streamlit.app/)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_App-8e44ad?style=for-the-badge)](https://telemetric.streamlit.app/)
 
 TeleMetric is an interactive, decision-support dashboard built to analyze customer behavior, predict churn, evaluate model risk, and simulate retention strategies. It bridges the gap between raw machine learning metrics and actionable business intelligence.
 
