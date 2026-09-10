@@ -32,7 +32,7 @@ st.markdown(cosmic_theme, unsafe_allow_html=True)
 st.markdown('<p class="telemetric-title">TeleMetric</p>', unsafe_allow_html=True)
 st.markdown("### Customer Retention & Churn Intelligence")
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 FINAL_RESULTS_PATH = OUTPUT_DIR / "final_model_selection.csv"
 FINAL_SUMMARY_PATH = OUTPUT_DIR / "final_model_selection.json"
